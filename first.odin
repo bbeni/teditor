@@ -20,6 +20,9 @@ font_size : f32 = 32.0
 font_spacing : f32 = 0.0 * font_size
 line_height : f32 = font_size * 1.1
 
+font_file :: #load("./UbuntuMono-Regular.ttf")
+glyph_count :: 1200
+
 draw_cursor :: proc(using editor: ^Editor, pos_x: f32, font_size: f32, font: raylib.Font) {
     line_nr, line_col, start := get_cursor(line_breaks[:], cursor)
     line_so_far := fmt.ctprintf("%s", text[start:start+line_col])
@@ -274,7 +277,6 @@ parse_args :: proc() -> (string, []u8, bool) {
     return file_name, text, true
 }
 
-
 main :: proc() {
 
     file_name, text, success := parse_args()
@@ -288,7 +290,7 @@ main :: proc() {
     raylib.InitWindow(1200, 900, "Teditor")
     raylib.SetTargetFPS(300)
 
-    font := raylib.LoadFont("./UbuntuMono-Regular.ttf")
+    font := raylib.LoadFontFromMemory(".ttf", raw_data(font_file), i32(len(font_file)), i32(font_size), nil, glyph_count)
 
 
     for !raylib.WindowShouldClose() {
