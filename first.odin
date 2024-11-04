@@ -20,12 +20,7 @@ font_size : f32 = 32.0
 font_spacing : f32 = 0.0 * font_size
 line_height : f32 = font_size * 1.1
 
-// save the last column for persisting cursor column when line is smaller
-last_col := 0
-
-
 draw_cursor :: proc(using editor: ^Editor, pos_x: f32, font_size: f32, font: raylib.Font) {
-
     line_nr, line_col, start := get_cursor(line_breaks[:], cursor)
     line_so_far := fmt.ctprintf("%s", text[start:start+line_col])
     size := raylib.MeasureTextEx(font, line_so_far, font_size, font_spacing)
@@ -82,9 +77,6 @@ draw_editor :: proc(using editor: ^Editor, width: f32, height: f32, pos_x: f32, 
 }
 
 
-
-
-
 Editor :: struct {
     text: [dynamic]u8,
     line_breaks: [dynamic]u32,
@@ -103,11 +95,7 @@ populate_editor :: proc(using editor: ^Editor, insert: []u8) {
         append(&text, '\n')
     }
 
-    for i in 0..<len(text) {
-        if text[i] == '\n' {
-            append(&line_breaks, u32(i))
-        }
-    }
+    recalculate_line_breaks(editor)
 }
 
 simulate_editor :: proc(using editor: ^Editor) {
@@ -128,6 +116,44 @@ simulate_editor :: proc(using editor: ^Editor) {
     }
 
     cursor = clamp(cursor, 0, len(text))
+
+    char := raylib.GetCharPressed()
+    if (char != 0) {
+        insert_char_at_cursor(editor, char)
+    }
+
+    if raylib.IsKeyPressed(raylib.KeyboardKey.ENTER) {
+        insert_char_at_cursor(editor, '\n')
+    }
+
+    if raylib.IsKeyPressed(raylib.KeyboardKey.BACKSPACE) {
+        delete_char_at_cursor(editor)
+    }
+
+}
+
+delete_char_at_cursor :: proc(using e: ^Editor) {
+    if cursor <= 0 do return
+    cursor -= 1
+    ordered_remove(&text, cursor)
+    recalculate_line_breaks(e)
+}
+
+insert_char_at_cursor :: proc(using e: ^Editor, char: rune) {
+    // TODO: support unicode
+    small := cast(u8)char
+    inject_at(&text, cursor, small)
+    cursor += 1
+    recalculate_line_breaks(e)
+}
+
+recalculate_line_breaks :: proc(using e: ^Editor) {
+    clear(&line_breaks)
+    for i in 0..<len(text) {
+        if text[i] == '\n' {
+            append(&line_breaks, u32(i))
+        }
+    }
 }
 
 move_cursor_left :: proc(using editor: ^Editor) {
@@ -145,7 +171,6 @@ move_cursor_down :: proc(using e: ^Editor) {
     c = max(last_col, c)
 
     // assuming it is the last character of the file (gets inserted anyway for now!)
-    fmt.println(line_breaks)
     last := int(line_breaks[len(line_breaks)-1])
 
     if n+1 >= len(line_breaks) {
@@ -170,7 +195,7 @@ move_cursor_up :: proc(using e: ^Editor) {
     n, c, s := get_cursor(line_breaks[:], cursor)
     c = max(last_col, c)
 
-    // first line go to beginning of file
+    // first line so we go to beginning of file
     if n == 0 {
         cursor = 0
         return
@@ -184,7 +209,7 @@ move_cursor_up :: proc(using e: ^Editor) {
         c = prev_lb - prev_start
     }
 
-    // assuming it is the last character of the file (gets inserted anyway for now!)
+    // assuming last line break is the last character of the file
     last := int(line_breaks[len(line_breaks)-1])
     cursor = clamp(prev_start+c, 0, last)
 }
@@ -247,10 +272,9 @@ parse_args :: proc() -> (string, []u8, bool) {
 
 main :: proc() {
 
-    //file_name := "first.odin"
     file_name, text, success := parse_args()
     if !success {
-        return
+        os.exit(1)
     }
 
     editor := Editor{}
