@@ -23,69 +23,6 @@ line_height : f32 = font_size * 1.1
 // save the last column for persisting cursor column when line is smaller
 last_col := 0
 
-cursor_below :: proc(line_breaks: []u32, cursor: int) -> int {
-    n, c, s := get_cursor(line_breaks, cursor)
-    c = max(last_col, c)
-
-    // assuming it is the last character of the file (gets inserted anyway for now!)
-    last := int(line_breaks[len(line_breaks)-1])
-
-    if n+1 >= len(line_breaks) {
-        // next line is EOF just return end i.e. last line break
-        // not sure if this can happen.
-        return last
-    }
-
-    next_start := int(line_breaks[n]) + 1
-    next_lb := int(line_breaks[n+1])
-
-    if (next_lb - next_start < c) {
-        last_col = c
-        c = next_lb - next_start
-    }
-
-    return clamp(next_start + c, 0, last)
-}
-
-cursor_above :: proc(line_breaks: []u32, cursor: int) -> int {
-    n, c, s := get_cursor(line_breaks, cursor)
-    c = max(last_col, c)
-
-    // first line go to beginning of file
-    if n == 0 {
-        return 0
-    }
-
-    prev_start := n > 1 ? int(line_breaks[n-2]) + 1 : 0
-    prev_lb := s - 1
-
-    if (prev_lb - prev_start <= c) {
-        last_col = c
-        c = prev_lb - prev_start
-    }
-
-    // assuming it is the last character of the file (gets inserted anyway for now!)
-    last := int(line_breaks[len(line_breaks)-1])
-    return clamp(prev_start+c, 0, last)
-}
-
-get_cursor :: proc(line_breaks: []u32, cursor: int) -> (int, int, int) {
-    line_nr: int = 0
-    line_col: int = cursor
-    line_start: int = 0
-
-    for lb, i in line_breaks {
-        if cursor <= int(lb) {
-            line_start = i > 0 ? int(line_breaks[i-1]) + 1 : 0
-            line_nr = i
-            line_col = cursor - line_start
-            break
-        }
-    }
-
-    return line_nr, line_col, line_start
-}
-
 
 draw_cursor :: proc(using editor: ^Editor, pos_x: f32, font_size: f32, font: raylib.Font) {
 
@@ -144,10 +81,15 @@ draw_editor :: proc(using editor: ^Editor, width: f32, height: f32, pos_x: f32, 
     }
 }
 
+
+
+
+
 Editor :: struct {
     text: [dynamic]u8,
     line_breaks: [dynamic]u32,
     cursor: int,
+    last_col: int, // set when cursor column is smaller than previous
 }
 
 populate_editor :: proc(using editor: ^Editor, insert: []u8) {
@@ -165,25 +107,99 @@ populate_editor :: proc(using editor: ^Editor, insert: []u8) {
 
 simulate_editor :: proc(using editor: ^Editor) {
     if raylib.IsKeyPressed(raylib.KeyboardKey.RIGHT) || raylib.IsKeyPressedRepeat(raylib.KeyboardKey.RIGHT) {
-        cursor += 1
-        _, last_col, _ = get_cursor(line_breaks[:], cursor)
+        move_cursor_right(editor)
     }
 
     if raylib.IsKeyPressed(raylib.KeyboardKey.LEFT) ||  raylib.IsKeyPressedRepeat(raylib.KeyboardKey.LEFT) {
-        cursor -= 1
-        _, last_col, _ = get_cursor(line_breaks[:], cursor)
+        move_cursor_left(editor)
     }
 
     if raylib.IsKeyPressed(raylib.KeyboardKey.DOWN) || raylib.IsKeyPressedRepeat(raylib.KeyboardKey.DOWN) {
-        cursor = cursor_below(line_breaks[:], cursor)
+        move_cursor_down(editor)
     }
 
     if raylib.IsKeyPressed(raylib.KeyboardKey.UP) ||  raylib.IsKeyPressedRepeat(raylib.KeyboardKey.UP) {
-        cursor = cursor_above(line_breaks[:], cursor)
+        move_cursor_up(editor)
     }
 
     cursor = clamp(cursor, 0, len(text))
 }
+
+move_cursor_left :: proc(using editor: ^Editor) {
+    cursor -= 1
+    _, last_col, _ = get_cursor(line_breaks[:], cursor)
+}
+
+move_cursor_right :: proc(using editor: ^Editor) {
+    cursor += 1
+    _, last_col, _ = get_cursor(line_breaks[:], cursor)
+}
+
+move_cursor_down :: proc(using e: ^Editor) {
+    n, c, s := get_cursor(line_breaks[:], cursor)
+    c = max(last_col, c)
+
+    // assuming it is the last character of the file (gets inserted anyway for now!)
+    last := int(line_breaks[len(line_breaks)-1])
+
+    if n+1 >= len(line_breaks) {
+        // next line is EOF just return end i.e. last line break
+        // not sure if this can happen.
+        cursor = last
+        return
+    }
+
+    next_start := int(line_breaks[n]) + 1
+    next_lb := int(line_breaks[n+1])
+
+    if (next_lb - next_start < c) {
+        last_col = c
+        c = next_lb - next_start
+    }
+
+    cursor = clamp(next_start + c, 0, last)
+}
+
+move_cursor_up :: proc(using e: ^Editor) {
+    n, c, s := get_cursor(line_breaks[:], cursor)
+    c = max(last_col, c)
+
+    // first line go to beginning of file
+    if n == 0 {
+        cursor = 0
+        return
+    }
+
+    prev_start := n > 1 ? int(line_breaks[n-2]) + 1 : 0
+    prev_lb := s - 1
+
+    if (prev_lb - prev_start <= c) {
+        last_col = c
+        c = prev_lb - prev_start
+    }
+
+    // assuming it is the last character of the file (gets inserted anyway for now!)
+    last := int(line_breaks[len(line_breaks)-1])
+    cursor = clamp(prev_start+c, 0, last)
+}
+
+get_cursor :: proc(line_breaks: []u32, cursor: int) -> (int, int, int) {
+    line_nr: int = 0
+    line_col: int = cursor
+    line_start: int = 0
+
+    for lb, i in line_breaks {
+        if cursor <= int(lb) {
+            line_start = i > 0 ? int(line_breaks[i-1]) + 1 : 0
+            line_nr = i
+            line_col = cursor - line_start
+            break
+        }
+    }
+
+    return line_nr, line_col, line_start
+}
+
 
 main :: proc() {
     raylib.InitWindow(1200, 900, "Teditor")
