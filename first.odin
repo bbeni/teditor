@@ -93,15 +93,20 @@ Editor :: struct {
 }
 
 populate_editor :: proc(using editor: ^Editor, insert: []u8) {
-    text = make([dynamic]u8, 0, len(insert)*2)
+    text = make([dynamic]u8, 0, len(insert)*2 + 1)
+
     append(&text, ..insert)
+
+    // the assumtion is: we have at least one newline
+    // we insert a line_break at the end if there is none
+    if len(text) == 0 || text[len(text)-1] != '\n' {
+        append(&text, '\n')
+    }
+
     for i in 0..<len(text) {
         if text[i] == '\n' {
             append(&line_breaks, u32(i))
         }
-    }
-    if text[len(text)-1] != '\n' {
-        append(&text, '\n')
     }
 }
 
@@ -140,6 +145,7 @@ move_cursor_down :: proc(using e: ^Editor) {
     c = max(last_col, c)
 
     // assuming it is the last character of the file (gets inserted anyway for now!)
+    fmt.println(line_breaks)
     last := int(line_breaks[len(line_breaks)-1])
 
     if n+1 >= len(line_breaks) {
@@ -200,22 +206,60 @@ get_cursor :: proc(line_breaks: []u32, cursor: int) -> (int, int, int) {
     return line_nr, line_col, line_start
 }
 
+parse_args :: proc() -> (string, []u8, bool) {
+
+    shift :: proc(args: ^[]string) -> string {
+        ret := args[0]
+        args^ = args[1:]
+        return ret
+    }
+
+    // assume first arguent is always the program
+    args := os.args
+    program_name := shift(&args)
+
+    if len(args) == 0 {
+        fmt.printf ("Usage: %s <filename>\n", program_name)
+        fmt.println("Error: no filename provided")
+        return "", {}, false
+    }
+
+    if len(args) >= 2 {
+        fmt.printf ("Usage: %s <filename>\n", program_name)
+        fmt.println("Error: too many arguments provided")
+        return "", {}, false
+    }
+
+    file_name := shift(&args)
+    text : []u8
+    if os.is_file(file_name) {
+        success: bool
+        text, success = os.read_entire_file_from_filename(file_name)
+        if !success {
+            fmt.printfln("Error: the file named `` could not be opend for whatever reason.", file_name)
+            return "", {}, false
+        }
+    }
+
+    return file_name, text, true
+}
+
 
 main :: proc() {
-    raylib.InitWindow(1200, 900, "Teditor")
-    raylib.SetTargetFPS(300)
 
-    font := raylib.LoadFont("./UbuntuMono-Regular.ttf")
-
-    file_name := "first.odin"
-
-    text, err := os.read_entire_file_from_filename_or_err(file_name)
-    if err != os.ERROR_NONE {
-        fmt.println(err)
+    //file_name := "first.odin"
+    file_name, text, success := parse_args()
+    if !success {
+        return
     }
 
     editor := Editor{}
     populate_editor(&editor, text)
+
+    raylib.InitWindow(1200, 900, "Teditor")
+    raylib.SetTargetFPS(300)
+
+    font := raylib.LoadFont("./UbuntuMono-Regular.ttf")
 
 
     for !raylib.WindowShouldClose() {
