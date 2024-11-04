@@ -16,7 +16,7 @@ text2_color :: raylib.Color{255, 188, 118, 255}
 // in pixels
 width : i32 = 1200
 height : i32 = 900
-font_size : f32 = 32.0
+font_size : f32 = 26.0
 font_spacing : f32 = 0.0 * font_size
 line_height : f32 = font_size * 1.1
 
@@ -27,18 +27,24 @@ draw_cursor :: proc(using editor: ^Editor, pos_x: f32, font_size: f32, font: ray
     line_nr, line_col, start := get_cursor(line_breaks[:], cursor)
     line_so_far := fmt.ctprintf("%s", text[start:start+line_col])
     size := raylib.MeasureTextEx(font, line_so_far, font_size, font_spacing)
-    cursor_pos := raylib.Vector2{pos_x + size.x, cast(f32)(line_nr)*line_height}
+    cursor_pos := raylib.Vector2{pos_x + size.x, cast(f32)(line_nr - top_line)*line_height}
     cursor_size := raylib.Vector2{font_size * 0.5, line_height}
     raylib.DrawRectangleV(cursor_pos, cursor_size, cursor_color)
 }
 
+visual_last_line :: proc(using e: ^Editor, height: f32, line_height: f32) -> int {
+    return min(possible_last_line(e, height, line_height), len(line_breaks))
+}
+
+possible_last_line :: proc(using e: ^Editor, height: f32, line_height: f32) -> int {
+    return int(height / line_height ) + top_line
+}
+
 draw_line_numbers :: proc(editor: ^Editor, height: f32, font_size: f32, font: raylib.Font) -> f32 {
     max_width : f32 = 0
-    for _, index in editor.line_breaks {
-        // =======================
-        if index > 100 do break
-        // =======================
-        to_print := fmt.ctprintf("%d", index)
+    last_line := visual_last_line(editor, height, line_height)
+    for _, index in editor.line_breaks[editor.top_line:last_line] {
+        to_print := fmt.ctprintf("%d", index + editor.top_line)
         v := raylib.MeasureTextEx(font, to_print, font_size, font_spacing)
         if v.x > max_width {
             max_width = v.x
@@ -46,11 +52,9 @@ draw_line_numbers :: proc(editor: ^Editor, height: f32, font_size: f32, font: ra
     }
 
     raylib.DrawRectangle(0, 0, cast(i32)max_width, cast(i32)height, line_nr_bg_color)
-    for _, index in editor.line_breaks {
-        // =======================
-        if index > 100 do break
-        // =======================
-        to_print := fmt.ctprintf("%d", index)
+    for _, index in editor.line_breaks[editor.top_line:last_line] {
+        line_number := index + editor.top_line
+        to_print := fmt.ctprintf("%d", line_number)
         size := raylib.MeasureTextEx(font, to_print, font_size, font_spacing)
         line_pos := raylib.Vector2{0, f32(index + 1) * line_height - size.y}
         raylib.DrawTextEx(font, to_print, line_pos, font_size, 0, line_nr_color)
@@ -62,9 +66,10 @@ draw_line_numbers :: proc(editor: ^Editor, height: f32, font_size: f32, font: ra
 draw_editor :: proc(using editor: ^Editor, width: f32, height: f32, pos_x: f32, font_size: f32, font: raylib.Font) {
 
     draw_cursor(editor, pos_x, font_size, font)
+    last_line := visual_last_line(editor, height, line_height)
 
     start: u32 = 0
-    for line_break, index in line_breaks {
+    for line_break, index in line_breaks[top_line:last_line] {
         // =======================
         if index > 100 do break
         // =======================
@@ -89,6 +94,7 @@ Editor :: struct {
     text: [dynamic]u8,
     line_breaks: [dynamic]u32,
     cursor: int,
+    top_line: int, // the line number that is to top most
     last_col: int, // set when cursor column is smaller than previous
 }
 
@@ -106,7 +112,8 @@ populate_editor :: proc(using editor: ^Editor, insert: []u8) {
     recalculate_line_breaks(editor)
 }
 
-simulate_editor :: proc(using editor: ^Editor) {
+simulate_editor :: proc(using editor: ^Editor, height: f32) {
+
     if raylib.IsKeyPressed(raylib.KeyboardKey.RIGHT) || raylib.IsKeyPressedRepeat(raylib.KeyboardKey.RIGHT) {
         move_cursor_right(editor)
     }
@@ -123,7 +130,7 @@ simulate_editor :: proc(using editor: ^Editor) {
         move_cursor_up(editor)
     }
 
-    cursor = clamp(cursor, 0, len(text))
+    cursor = clamp(cursor, 0, len(text) - 1)
 
     char := raylib.GetCharPressed()
     if (char != 0) {
@@ -138,6 +145,10 @@ simulate_editor :: proc(using editor: ^Editor) {
         delete_char_at_cursor(editor)
     }
 
+    n, _, _ := get_cursor(editor.line_breaks[:], cursor)
+    possible_last_line := possible_last_line(editor, height, line_height)
+    if n >= possible_last_line do top_line += 1
+    if n < top_line do  top_line -= 1
 }
 
 delete_char_at_cursor :: proc(using e: ^Editor) {
@@ -295,7 +306,7 @@ main :: proc() {
 
     for !raylib.WindowShouldClose() {
 
-        simulate_editor(&editor)
+        simulate_editor(&editor, f32(height))
 
         raylib.BeginDrawing()
         raylib.ClearBackground(bg_color)
@@ -307,4 +318,3 @@ main :: proc() {
         free_all(context.temp_allocator)
     }
 }
-
