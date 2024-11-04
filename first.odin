@@ -32,6 +32,9 @@ draw_cursor :: proc(using editor: ^Editor, pos_x: f32, font_size: f32, font: ray
 draw_line_numbers :: proc(editor: ^Editor, height: f32, font_size: f32, font: raylib.Font) -> f32 {
     max_width : f32 = 0
     for _, index in editor.line_breaks {
+        // =======================
+        if index > 100 do break
+        // =======================
         to_print := fmt.ctprintf("%d", index)
         v := raylib.MeasureTextEx(font, to_print, font_size, font_spacing)
         if v.x > max_width {
@@ -41,11 +44,12 @@ draw_line_numbers :: proc(editor: ^Editor, height: f32, font_size: f32, font: ra
 
     raylib.DrawRectangle(0, 0, cast(i32)max_width, cast(i32)height, line_nr_bg_color)
     for _, index in editor.line_breaks {
+        // =======================
+        if index > 100 do break
+        // =======================
         to_print := fmt.ctprintf("%d", index)
-
         size := raylib.MeasureTextEx(font, to_print, font_size, font_spacing)
         line_pos := raylib.Vector2{0, f32(index + 1) * line_height - size.y}
-        //raylib.DrawRectangleV(line_pos, size, raylib.RED)
         raylib.DrawTextEx(font, to_print, line_pos, font_size, 0, line_nr_color)
     }
 
@@ -58,13 +62,14 @@ draw_editor :: proc(using editor: ^Editor, width: f32, height: f32, pos_x: f32, 
 
     start: u32 = 0
     for line_break, index in line_breaks {
+        // =======================
+        if index > 100 do break
+        // =======================
         line := fmt.ctprintf("%s", text[start:line_break])
         start = line_break
 
         size := raylib.MeasureTextEx(font, line, font_size, font_spacing)
         line_pos := raylib.Vector2{pos_x, f32(index + 1) * line_height - size.y}
-
-        //raylib.DrawRectangleV(line_pos, size, raylib.BEIGE)
         raylib.DrawTextEx(
             font,
             line,
@@ -122,11 +127,11 @@ simulate_editor :: proc(using editor: ^Editor) {
         insert_char_at_cursor(editor, char)
     }
 
-    if raylib.IsKeyPressed(raylib.KeyboardKey.ENTER) {
+    if raylib.IsKeyPressed(raylib.KeyboardKey.ENTER) || raylib.IsKeyPressedRepeat(raylib.KeyboardKey.ENTER) {
         insert_char_at_cursor(editor, '\n')
     }
 
-    if raylib.IsKeyPressed(raylib.KeyboardKey.BACKSPACE) {
+    if raylib.IsKeyPressed(raylib.KeyboardKey.BACKSPACE) || raylib.IsKeyPressedRepeat(raylib.KeyboardKey.BACKSPACE){
         delete_char_at_cursor(editor)
     }
 
