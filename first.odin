@@ -18,7 +18,7 @@ width : i32 = 1200
 height : i32 = 900
 font_size : f32 = 32.0
 font_spacing : f32 = 0.0 * font_size
-line_height : f32 = font_size * 1.0
+line_height : f32 = font_size * 1.1
 
 // save the last column for persisting cursor column when line is smaller
 last_col := 0
@@ -91,13 +91,9 @@ draw_cursor :: proc(using editor: ^Editor, pos_x: f32, font_size: f32, font: ray
 
     line_nr, line_col, start := get_cursor(line_breaks[:], cursor)
     line_so_far := fmt.ctprintf("%s", text[start:start+line_col])
-    fmt.println(line_nr, line_col, start)
-    fmt.println(line_so_far, cursor)
     size := raylib.MeasureTextEx(font, line_so_far, font_size, font_spacing)
-
     cursor_pos := raylib.Vector2{pos_x + size.x, cast(f32)(line_nr)*line_height}
     cursor_size := raylib.Vector2{font_size * 0.5, line_height}
-
     raylib.DrawRectangleV(cursor_pos, cursor_size, cursor_color)
 }
 
